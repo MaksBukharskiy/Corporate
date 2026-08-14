@@ -1,12 +1,13 @@
-# Corporate Benefits Platform
+# Corporate
 
-MVP платформы корпоративных льгот для хакатона Click (Fintech).
+MVP платформы корпоративных льгот.
 
 ## Стек
 
 - **Backend:** Java 21, Spring Boot 3.5, PostgreSQL, Liquibase, ZXing (QR)
 - **Frontend:** React + Vite + Tailwind CSS
 - **Mobile:** Expo / React Native
+- **Native Android:** Jetpack Compose
 - **Infra:** Docker Compose
 
 ## Быстрый старт
@@ -14,7 +15,6 @@ MVP платформы корпоративных льгот для хакато
 ### Docker (рекомендуется)
 
 ```bash
-cd /Users/frdmlvver/Desktop/corporate
 docker compose up --build
 ```
 
@@ -60,16 +60,15 @@ npx expo start
 ```
 
 Фейковый логин:
-- сотрудник: `ali` / `1234`
-- админ: `admin` / `1234`
+- сотрудник: `ali@click.uz` / `1234`
+- админ: `admin@click.uz` / `1234`
 
 ## Демо-сценарий
 
 1. **Сотрудник** — выбрать Ali Karimov → каталог → FitZone → «Получить льготу»
 2. **Мерчант** — FitZone Premium → «Одобрить»
-3. **Сотрудник** — confetti + QR-код, баланс уменьшился
+3. **Сотрудник** — QR-код, баланс уменьшился
 4. **Админ** — транзакции и статистика
-5. Переключить компанию на **Uzum Tech** — другие сотрудники и баланс
 
 ## API
 
@@ -88,6 +87,7 @@ npx expo start
 
 ```
 corporate/
+├── android-native/   Jetpack Compose app
 ├── backend/          Spring Boot API
 ├── web/              React frontend (3 роли)
 ├── mobile/           Expo app (сотрудник / админ)
@@ -97,6 +97,6 @@ corporate/
 
 ## Seed-данные
 
-- **Click Office:** Ali (12500), Dilnoza (8000), Jasur (15000)
+- **Corporate:** Ali (12500), Dilnoza (8000), Jasur (15000)
 - **Uzum Tech:** Madina (10000), Bekzod (6000)
 - **Мерчанты:** FitZone, Osh Markazi, IT Academy, MedPlus, Travel UZ
