@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -55,6 +56,7 @@ import uz.click.benefits.ui.theme.T
 import uz.click.benefits.ui.theme.categoryLabel
 import uz.click.benefits.ui.components.RatingStars
 import uz.click.benefits.ui.components.SceneBackdrop
+import uz.click.benefits.ui.components.heroRes
 import uz.click.benefits.ui.components.sceneRes
 import uz.click.benefits.ui.components.sceneScrim
 
@@ -64,6 +66,7 @@ fun EmployeeCategory(
     category: Category,
     onBack: () -> Unit,
     onOffer: (String) -> Unit,
+    onRedeem: (String) -> Unit = {},
 ) {
     val subsections = remember(category) { Seed.interests.filter { it.category == category }.map { it.title } }
     var subsection by remember(category) { mutableStateOf<String?>(null) }
@@ -97,7 +100,7 @@ fun EmployeeCategory(
                     Icon(Icons.Outlined.ChevronLeft, "Назад", tint = C.white, modifier = Modifier.size(26.dp))
                 }
             }
-            AnimatedVisibility(shown, enter = fadeIn(tween(380)) + slideInVertically(tween(380)) { it / 5 }) {
+            AnimatedVisibility(shown, enter = fadeIn(tween(560)) + slideInVertically(tween(560)) { it / 5 }) {
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     Text(categoryLabel(category), style = T.title.copy(fontSize = 34.sp, color = C.white), color = C.white)
                     Text("${offers.size} льгот в разделе", color = C.white.copy(0.85f), fontFamily = T.sans, fontSize = 15.sp)
@@ -111,19 +114,22 @@ fun EmployeeCategory(
                     .height(44.dp)
                     .clip(RoundedCornerShape(22.dp))
                     .background(Color(0xFF1C1C1E)),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ModeTab("По льготам", !byPartner, Modifier.weight(1f)) { byPartner = false }
-                ModeTab("По партнёрам", byPartner, Modifier.weight(1f)) { byPartner = true }
+                ModeTab("По льготам", !byPartner, Modifier.weight(1f).fillMaxHeight()) { byPartner = false }
+                ModeTab("По партнёрам", byPartner, Modifier.weight(1f).fillMaxHeight()) { byPartner = true }
             }
             Spacer(Modifier.height(14.dp))
-            LazyRow(Modifier.padding(start = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    SubChip("Все", subsection == null) { subsection = null }
-                }
+            Row(
+                Modifier
+                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                SubChip("Все", subsection == null, Modifier.weight(1f)) { subsection = null }
                 subsections.forEach { name ->
-                    item { SubChip(name, subsection == name) { subsection = name } }
+                    SubChip(name, subsection == name, Modifier.weight(1f)) { subsection = name }
                 }
-                item { Spacer(Modifier.width(12.dp)) }
             }
             if (category == Category.events) {
                 Spacer(Modifier.height(12.dp))
@@ -152,7 +158,7 @@ fun EmployeeCategory(
             }
             Spacer(Modifier.height(16.dp))
             SceneBackdrop(
-                resId = sceneRes(category),
+                resId = heroRes(category),
                 modifier = Modifier
                     .padding(horizontal = 20.dp)
                     .fillMaxWidth()
@@ -189,9 +195,9 @@ fun EmployeeCategory(
                 }
                 AnimatedVisibility(
                     visible = cardShown,
-                    enter = fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 5 },
+                    enter = fadeIn(tween(520)) + slideInVertically(tween(520)) { it / 5 },
                 ) {
-                    VenueCard(store, offer) { onOffer(offer.id) }
+                    VenueCard(store, offer, onClick = { onOffer(offer.id) }, onRedeem = { onRedeem(offer.id) })
                 }
             }
             if (cards.isEmpty()) {
@@ -211,35 +217,47 @@ private fun ModeTab(title: String, selected: Boolean, modifier: Modifier, onClic
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(title, color = C.white, fontFamily = T.sans, fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal)
+        Text(
+            title,
+            color = C.white,
+            fontFamily = T.sans,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+        )
     }
 }
 
 @Composable
-private fun SubChip(title: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        title,
-        color = C.white,
-        fontFamily = T.sans,
-        fontSize = 13.sp,
-        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-        modifier = Modifier
+private fun SubChip(title: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(40.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) C.brand else C.card)
             .border(1.dp, if (selected) C.brand else Color(0xFF3A3A3C), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            title,
+            color = C.white,
+            fontFamily = T.sans,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 1,
+        )
+    }
 }
 
 @Composable
-private fun VenueCard(store: AppStore, offer: Offer, onClick: () -> Unit) {
+private fun VenueCard(store: AppStore, offer: Offer, onClick: () -> Unit, onRedeem: () -> Unit) {
     val merchant = store.merchant(offer.merchantId)
     val event = offer.category == Category.events
     val titleColor = if (event) Color(0xFF86EFAC) else C.navy
     Column(
         Modifier
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
             .background(C.card)
@@ -313,6 +331,7 @@ private fun VenueCard(store: AppStore, offer: Offer, onClick: () -> Unit) {
                     fontFamily = T.sans,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
+                    modifier = Modifier.clickable(onClick = onRedeem),
                 )
                 Icon(Icons.Outlined.ChevronRight, null, tint = C.brand, modifier = Modifier.size(18.dp))
             }

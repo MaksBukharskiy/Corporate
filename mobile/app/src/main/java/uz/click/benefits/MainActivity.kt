@@ -12,40 +12,31 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.delay
 import uz.click.benefits.data.AppStore
 import uz.click.benefits.data.Category
 import uz.click.benefits.data.Role
@@ -54,9 +45,11 @@ import uz.click.benefits.ui.admin.AdminOverview
 import uz.click.benefits.ui.admin.AdminPartners
 import uz.click.benefits.ui.admin.AdminPeople
 import uz.click.benefits.ui.components.FloatingTabBar
+import uz.click.benefits.ui.components.SuccessToastHost
 import uz.click.benefits.ui.components.adminTabs
 import uz.click.benefits.ui.components.employeeTabs
 import uz.click.benefits.ui.components.merchantTabs
+import uz.click.benefits.ui.employee.CoachChat
 import uz.click.benefits.ui.employee.EmployeeBenefit
 import uz.click.benefits.ui.employee.EmployeeCatalog
 import uz.click.benefits.ui.employee.EmployeeCategory
@@ -66,6 +59,8 @@ import uz.click.benefits.ui.employee.EmployeeProfile
 import uz.click.benefits.ui.employee.EmployeeRequestDetail
 import uz.click.benefits.ui.employee.EmployeeRequests
 import uz.click.benefits.ui.employee.EmployeeSaved
+import uz.click.benefits.ui.employee.RedeemCardScreen
+import uz.click.benefits.ui.employee.WalletScreen
 import uz.click.benefits.ui.login.LoginScreen
 import uz.click.benefits.ui.merchant.MerchantIncoming
 import uz.click.benefits.ui.merchant.MerchantOffers
@@ -73,11 +68,11 @@ import uz.click.benefits.ui.merchant.MerchantRegister
 import uz.click.benefits.ui.merchant.OfferForm
 import uz.click.benefits.ui.onboarding.PreferencesScreen
 import uz.click.benefits.ui.theme.C
-import uz.click.benefits.ui.theme.T
 import uz.click.benefits.ui.theme.ClickTheme
 
 private fun isStackScreen(key: String) =
-    key == "inbox" || key == "saved" || key.startsWith("category/") || key.startsWith("offer/") || key.startsWith("request/")
+    key == "inbox" || key == "saved" || key == "wallet" ||
+        key.startsWith("category/") || key.startsWith("offer/") || key.startsWith("request/") || key.startsWith("redeem/")
 
 @Composable
 private fun StatusBarScrim() {
@@ -109,6 +104,7 @@ class MainActivity : ComponentActivity() {
                         Role.admin -> AdminRoot(store)
                     }
                     StatusBarScrim()
+                    SuccessToastHost(store.toast, store::clearToast)
                 }
             }
         }
@@ -125,6 +121,8 @@ private fun EmployeeRoot(store: AppStore) {
     var categoryKey by rememberSaveable { mutableStateOf<String?>(null) }
     var catalogCategory by rememberSaveable { mutableStateOf<String?>(null) }
     var catalogPaid by rememberSaveable { mutableStateOf<String?>(null) }
+    var redeemOfferId by rememberSaveable { mutableStateOf<String?>(null) }
+    var wallet by rememberSaveable { mutableStateOf(false) }
 
     fun openCatalog(category: Category? = null, paid: Boolean? = null) {
         catalogCategory = category?.name
@@ -136,50 +134,71 @@ private fun EmployeeRoot(store: AppStore) {
         tab = "catalog"
         inbox = false
         saved = false
+        wallet = false
         categoryKey = null
         offerId = null
         requestId = null
+        redeemOfferId = null
     }
 
     fun openCategory(category: Category) {
         categoryKey = category.name
         inbox = false
         saved = false
+        wallet = false
         offerId = null
         requestId = null
+        redeemOfferId = null
     }
 
     fun openSaved() {
         saved = true
         inbox = false
+        wallet = false
         offerId = null
         requestId = null
-        store.clearSavedToast()
+        redeemOfferId = null
     }
 
     fun openInbox() {
         inbox = true
         saved = false
+        wallet = false
         offerId = null
         requestId = null
+        redeemOfferId = null
     }
 
-    BackHandler(enabled = inbox || saved || categoryKey != null || offerId != null || requestId != null) {
+    fun openWallet() {
+        wallet = true
+        inbox = false
+        saved = false
+        offerId = null
+        requestId = null
+        redeemOfferId = null
+        categoryKey = null
+    }
+
+    BackHandler(enabled = inbox || saved || wallet || categoryKey != null || offerId != null || requestId != null || redeemOfferId != null) {
         when {
+            redeemOfferId != null -> redeemOfferId = null
             requestId != null -> requestId = null
             offerId != null -> offerId = null
             inbox -> inbox = false
             saved -> saved = false
+            wallet -> wallet = false
             else -> categoryKey = null
         }
     }
 
     val overlay = when {
         store.session?.onboardingDone != true -> "onboarding"
+        redeemOfferId != null -> "redeem/${redeemOfferId}"
         requestId != null -> "request/${requestId}"
         offerId != null -> "offer/${offerId}"
         inbox -> "inbox"
         saved -> "saved"
+        wallet -> "wallet"
         categoryKey != null -> "category/${categoryKey}"
         else -> tab
     }
@@ -191,10 +210,11 @@ private fun EmployeeRoot(store: AppStore) {
                 val entering = isStackScreen(targetState)
                 val leaving = isStackScreen(initialState)
                 if (entering || leaving) {
-                    slideInHorizontally(tween(280)) { if (entering) it else -it / 4 } + fadeIn(tween(220)) togetherWith
-                        slideOutHorizontally(tween(240)) { if (leaving) it else -it / 4 } + fadeOut(tween(180))
+                    slideInHorizontally(tween(520, easing = FastOutSlowInEasing)) { if (entering) it else -it / 5 } + fadeIn(tween(420)) togetherWith
+                        slideOutHorizontally(tween(420, easing = FastOutSlowInEasing)) { if (leaving) it else -it / 5 } + fadeOut(tween(320))
                 } else {
-                    fadeIn(tween(180)) togetherWith fadeOut(tween(120))
+                    fadeIn(tween(560, easing = FastOutSlowInEasing)) + slideInVertically(tween(560, easing = FastOutSlowInEasing)) { it / 10 } togetherWith
+                        fadeOut(tween(360)) + slideOutVertically(tween(360, easing = FastOutSlowInEasing)) { -it / 14 }
                 }
             },
             label = "employeeScreen",
@@ -216,6 +236,7 @@ private fun EmployeeRoot(store: AppStore) {
                     store,
                     onBack = { saved = false },
                     onOffer = { offerId = it },
+                    onRedeem = { redeemOfferId = it },
                     onFind = { openCatalog() },
                 )
                 screen.startsWith("category/") -> EmployeeCategory(
@@ -223,6 +244,19 @@ private fun EmployeeRoot(store: AppStore) {
                     category = runCatching { Category.valueOf(screen.removePrefix("category/")) }.getOrDefault(Category.sport),
                     onBack = { categoryKey = null },
                     onOffer = { offerId = it },
+                    onRedeem = { redeemOfferId = it },
+                )
+                screen == "wallet" -> WalletScreen(
+                    store,
+                    onBack = { wallet = false },
+                    onSpend = { openCatalog(paid = true) },
+                    onOffer = { offerId = it },
+                    onRedeem = { redeemOfferId = it },
+                )
+                screen.startsWith("redeem/") -> RedeemCardScreen(
+                    store,
+                    screen.removePrefix("redeem/"),
+                    onBack = { redeemOfferId = null },
                 )
                 screen.startsWith("request/") -> EmployeeRequestDetail(
                     store,
@@ -233,24 +267,36 @@ private fun EmployeeRoot(store: AppStore) {
                     store,
                     screen.removePrefix("offer/"),
                     onBack = { offerId = null },
-                    onSubmitted = { id ->
+                    onRedeem = { redeemOfferId = it },
+                    onSubmitted = {
                         offerId = null
-                        requestId = id
+                        requestId = null
+                        redeemOfferId = null
+                        categoryKey = null
+                        inbox = false
+                        saved = false
+                        wallet = false
+                        catalogCategory = null
+                        catalogPaid = null
+                        tab = "home"
                     },
                 )
                 screen == "home" -> EmployeeHome(
                     store,
                     onAllRequests = { tab = "requests" },
                     onOffer = { offerId = it },
+                    onRedeem = { redeemOfferId = it },
                     onRequest = { requestId = it },
                     onCategory = { openCategory(it) },
                     onSaved = { openSaved() },
                     onBell = { openInbox() },
                     onCatalog = { openCatalog() },
+                    onWallet = { openWallet() },
                 )
                 screen == "catalog" -> EmployeeCatalog(
                     store,
                     onOffer = { offerId = it },
+                    onRedeem = { redeemOfferId = it },
                     startCategory = catalogCategory?.let { runCatching { Category.valueOf(it) }.getOrNull() },
                     startPaid = when (catalogPaid) {
                         "paid" -> true
@@ -260,6 +306,7 @@ private fun EmployeeRoot(store: AppStore) {
                     onSaved = { openSaved() },
                     onBell = { openInbox() },
                 )
+                screen == "you" -> CoachChat(store)
                 screen == "requests" -> EmployeeRequests(
                     store,
                     onOpen = { requestId = it },
@@ -276,7 +323,7 @@ private fun EmployeeRoot(store: AppStore) {
                 )
             }
         }
-        if (offerId == null && requestId == null && !inbox && !saved && categoryKey == null && store.session?.onboardingDone == true) {
+        if (offerId == null && requestId == null && redeemOfferId == null && !inbox && !saved && !wallet && categoryKey == null && store.session?.onboardingDone == true) {
             Box(Modifier.align(Alignment.BottomCenter)) {
                 FloatingTabBar(employeeTabs(), tab) { key ->
                     if (key == "catalog") openCatalog() else {
@@ -285,29 +332,6 @@ private fun EmployeeRoot(store: AppStore) {
                         tab = key
                     }
                 }
-            }
-        }
-        store.toastSavedId?.let { id ->
-            val title = store.offer(id)?.title ?: "Льгота"
-            LaunchedEffect(id) {
-                delay(3200)
-                store.clearSavedToast()
-            }
-            Row(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, bottom = if (inbox || saved || offerId != null) 24.dp else 88.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(C.card)
-                    .clickable { openSaved() }
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("В избранном: $title", color = C.navy, fontFamily = T.sans, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(8.dp))
-                Text("Открыть", color = C.brand, fontFamily = T.sans, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
         }
     }

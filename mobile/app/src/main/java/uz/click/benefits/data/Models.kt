@@ -104,3 +104,18 @@ data class Transaction(
     val offerId: String?,
     val createdAt: String,
 )
+
+data class PartnerLead(
+    val id: String,
+    val company: String,
+    val contact: String,
+    val email: String,
+    val note: String,
+    val createdAt: String,
+)
+
+data class AppToast(
+    val id: Long = System.currentTimeMillis(),
+    val text: String,
+    val hero: Boolean = false,
+)

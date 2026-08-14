@@ -111,7 +111,7 @@ fun ScreenHeader(
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(top = if (light) 10.dp else 0.dp, bottom = if (light) 4.dp else 0.dp),
+            .padding(top = if (light) 10.dp else 7.dp, bottom = if (light) 4.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(

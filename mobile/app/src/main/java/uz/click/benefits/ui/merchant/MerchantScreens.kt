@@ -41,6 +41,7 @@ import uz.click.benefits.data.Offer
 import uz.click.benefits.data.RequestStatus
 import uz.click.benefits.ui.components.PrimaryButton
 import uz.click.benefits.ui.components.StatusBadge
+import uz.click.benefits.ui.components.StatusTrack
 import uz.click.benefits.ui.theme.C
 import uz.click.benefits.ui.theme.categoryLabel
 
@@ -148,6 +149,8 @@ fun MerchantIncoming(store: AppStore) {
                     }
                     StatusBadge(req.status)
                 }
+                Spacer(Modifier.height(12.dp))
+                StatusTrack(req.status, showLabels = true)
                 if (req.status == RequestStatus.pending) {
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

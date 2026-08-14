@@ -1,8 +1,5 @@
 package uz.click.benefits.ui.employee
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
@@ -29,18 +26,12 @@ import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import uz.click.benefits.data.AppStore
 import uz.click.benefits.ui.components.PrimaryButton
 import uz.click.benefits.ui.theme.C
@@ -51,6 +42,7 @@ fun EmployeeSaved(
     store: AppStore,
     onBack: () -> Unit,
     onOffer: (String) -> Unit,
+    onRedeem: (String) -> Unit = {},
     onFind: () -> Unit,
 ) {
     val items = store.employeeOffers("", null, savedOnly = true)
@@ -92,8 +84,8 @@ fun EmployeeSaved(
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item(span = { GridItemSpan(2) }) {
                 Text(
@@ -105,17 +97,9 @@ fun EmployeeSaved(
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
             }
-            itemsIndexed(items, key = { _, offer -> offer.id }) { index, offer ->
-                var shown by remember(offer.id) { mutableStateOf(false) }
-                LaunchedEffect(offer.id) {
-                    delay(index * 60L)
-                    shown = true
-                }
-                AnimatedVisibility(
-                    visible = shown,
-                    enter = fadeIn() + slideInVertically { it / 4 },
-                ) {
-                    OfferModule(store, offer, framed = true) { onOffer(offer.id) }
+            items(items, key = { it.id }) { offer ->
+                Box(Modifier.animateItem()) {
+                    OfferModule(store, offer, framed = true, onClick = { onOffer(offer.id) }, onRedeem = { onRedeem(offer.id) })
                 }
             }
         }

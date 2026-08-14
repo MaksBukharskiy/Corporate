@@ -113,9 +113,7 @@ fun EntryQrCard(request: BenefitRequest) {
             .padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text("Пропуск на вход", fontFamily = T.sans, fontWeight = FontWeight.Bold, color = C.white, fontSize = 17.sp)
-        Text("Покажите QR на входе", style = T.caption)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
         Box(
             Modifier
                 .size(236.dp)

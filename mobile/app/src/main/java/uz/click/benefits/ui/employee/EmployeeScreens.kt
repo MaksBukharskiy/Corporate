@@ -1,8 +1,12 @@
 package uz.click.benefits.ui.employee
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -20,7 +24,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -30,6 +33,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -55,8 +60,8 @@ import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.StarBorder
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -65,17 +70,21 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import uz.click.benefits.data.RequestStatus
 import uz.click.benefits.data.AppStore
+import uz.click.benefits.data.BenefitRequest
 import uz.click.benefits.data.Category
 import uz.click.benefits.data.Offer
 import uz.click.benefits.ui.components.PrimaryButton
@@ -85,18 +94,23 @@ import uz.click.benefits.ui.components.ScreenHeader
 import uz.click.benefits.ui.components.StatusBadge
 import uz.click.benefits.ui.components.StatusTrack
 import uz.click.benefits.ui.components.EntryQrCard
+import uz.click.benefits.ui.components.PartnerLeadForm
 import uz.click.benefits.ui.components.hasEntryPass
 import uz.click.benefits.ui.components.sceneRes
+import uz.click.benefits.ui.components.heroRes
 import uz.click.benefits.ui.components.sceneScrim
 import uz.click.benefits.ui.theme.C
 import uz.click.benefits.ui.theme.T
 import uz.click.benefits.ui.theme.categoryAccent
 import uz.click.benefits.ui.theme.homeWash
 import uz.click.benefits.ui.theme.categoryLabel
-import uz.click.benefits.ui.theme.roleDescription
-import uz.click.benefits.ui.theme.roleTitle
+import uz.click.benefits.ui.theme.requestRank
 import uz.click.benefits.ui.theme.statusLabel
 import java.text.NumberFormat
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.TextStyle as DateTextStyle
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 @Composable
@@ -104,16 +118,19 @@ fun EmployeeHome(
     store: AppStore,
     onAllRequests: () -> Unit,
     onOffer: (String) -> Unit,
+    onRedeem: (String) -> Unit = {},
     onRequest: (String) -> Unit = {},
     onCategory: (Category) -> Unit,
     onSaved: () -> Unit,
     onBell: () -> Unit,
     onCatalog: () -> Unit,
+    onWallet: () -> Unit,
 ) {
     val user = store.session ?: return
-    val company = store.company(user.companyId ?: "")
-    val live = store.requests.filter { it.employeeId == user.id }.take(2)
-    val recommended = store.recommendedOffers().ifEmpty { store.employeeOffers("", null) }.take(4)
+    val live = store.requests.filter { it.employeeId == user.id }.sortedBy { requestRank(it.status) }.take(2)
+    val recommended = store.recommendedOffers().ifEmpty { store.employeeOffers("", null) }
+        .sortedByDescending { store.isSaved(it.id) }
+        .take(4)
     val featured = recommended.firstOrNull()
     Box(Modifier.fillMaxSize().background(C.bg)) {
         Box(Modifier.fillMaxWidth().height(200.dp).background(homeWash()))
@@ -123,7 +140,7 @@ fun EmployeeHome(
                 .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
                 .padding(horizontal = 20.dp)
-                .padding(top = 4.dp, bottom = 120.dp),
+                .padding(top = 11.dp, bottom = 120.dp),
         ) {
         ScreenHeader(
             "Главная",
@@ -133,10 +150,11 @@ fun EmployeeHome(
             onSaved = onSaved,
             onBell = onBell,
         )
-        Text(company?.name ?: "", style = T.caption)
+        Spacer(Modifier.height(14.dp))
+        CorporateMiniCard(store, onOpen = onWallet)
         Spacer(Modifier.height(18.dp))
         featured?.let { offer ->
-            FeaturedCard(offer) { onOffer(offer.id) }
+            FeaturedCard(offer, onClick = { onOffer(offer.id) }, onRedeem = { onRedeem(offer.id) })
         }
         Spacer(Modifier.height(36.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -153,13 +171,29 @@ fun EmployeeHome(
             Spacer(Modifier.height(10.dp))
             live.forEach { req ->
                 val offer = store.offer(req.offerId)
-                MenuRow(offer?.title ?: "", req.createdAt, onClick = { onRequest(req.id) }) {
-                    StatusBadge(req.status)
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(C.card)
+                        .clickable { onRequest(req.id) }
+                        .padding(14.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(offer?.title ?: "", fontFamily = T.sans, fontWeight = FontWeight.SemiBold, color = C.navy)
+                            Text(req.createdAt, style = T.caption)
+                        }
+                        StatusBadge(req.status)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    StatusTrack(req.status)
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
-        Text("Для вас", style = T.section)
+        Text("Для вас", style = T.section, modifier = Modifier.padding(start = 20.dp))
         Spacer(Modifier.height(12.dp))
         recommended.chunked(2).forEachIndexed { row, pair ->
             var shown by remember { mutableStateOf(false) }
@@ -169,11 +203,11 @@ fun EmployeeHome(
             }
             AnimatedVisibility(
                 visible = shown,
-                enter = fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 5 },
+                enter = fadeIn(tween(520)) + slideInVertically(tween(520)) { it / 5 },
             ) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     pair.forEach { offer ->
-                        Box(Modifier.weight(1f)) { OfferModule(store, offer, framed = true) { onOffer(offer.id) } }
+                        Box(Modifier.weight(1f)) { OfferModule(store, offer, framed = true, onClick = { onOffer(offer.id) }, onRedeem = { onRedeem(offer.id) }) }
                     }
                     if (pair.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -187,6 +221,7 @@ fun EmployeeHome(
 fun EmployeeCatalog(
     store: AppStore,
     onOffer: (String) -> Unit,
+    onRedeem: (String) -> Unit = {},
     startCategory: Category?,
     startPaid: Boolean?,
     onSaved: () -> Unit,
@@ -199,13 +234,13 @@ fun EmployeeCatalog(
         category = startCategory
         paidFilter = startPaid
     }
-    val offers = store.employeeOffers(query, category, paidFilter)
+    val offers = store.employeeOffers(query, category, paidFilter).sortedByDescending { store.isSaved(it.id) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize().background(C.bg),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 120.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         item(span = { GridItemSpan(2) }) {
             Column(Modifier.statusBarsPadding().padding(top = 8.dp, bottom = 4.dp)) {
@@ -283,13 +318,15 @@ fun EmployeeCatalog(
             }
         }
         items(offers, key = { it.id }) { offer ->
-            OfferModule(store, offer) { onOffer(offer.id) }
+            Box(Modifier.animateItem()) {
+                OfferModule(store, offer, onClick = { onOffer(offer.id) }, onRedeem = { onRedeem(offer.id) })
+            }
         }
     }
 }
 
 @Composable
-fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubmitted: (String) -> Unit) {
+fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onRedeem: (String) -> Unit = {}, onSubmitted: (String) -> Unit) {
     val offer = store.offer(offerId)
     if (offer == null) {
         MissingStackScreen("Льгота не найдена", onBack)
@@ -297,10 +334,11 @@ fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubm
     }
     val merchant = store.merchant(offer.merchantId)
     var shown by remember { mutableStateOf(false) }
+    var boughtId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(offer.id) { shown = true }
     Box(Modifier.fillMaxSize().background(C.bg)) {
         SceneBackdrop(
-            resId = sceneRes(offer),
+            resId = heroRes(offer),
             modifier = Modifier.fillMaxWidth().height(280.dp),
             overlay = sceneScrim(top = 0.28f, mid = 0.42f, bottom = 0.88f),
         )
@@ -323,7 +361,7 @@ fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubm
                     }
                 }
                 Spacer(Modifier.height(28.dp))
-                AnimatedVisibility(shown, enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { it / 4 }) {
+                AnimatedVisibility(shown, enter = fadeIn(tween(560)) + slideInVertically(tween(560)) { it / 4 }) {
                     Column {
                         Text(categoryLabel(offer.category), color = C.white.copy(0.85f), fontFamily = T.sans, fontSize = 14.sp)
                         Text(
@@ -347,30 +385,22 @@ fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubm
                 }
             }
             Spacer(Modifier.height(20.dp))
-            AnimatedVisibility(shown, enter = fadeIn(tween(500)) + slideInVertically(tween(450)) { it / 6 }) {
+            AnimatedVisibility(shown, enter = fadeIn(tween(640)) + slideInVertically(tween(600)) { it / 6 }) {
                 Column(Modifier.padding(horizontal = 20.dp)) {
-                    SceneBackdrop(
-                        resId = sceneRes(offer),
-                        modifier = Modifier
+                    Column(
+                        Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 132.dp)
-                            .clip(RoundedCornerShape(22.dp)),
-                        overlay = Brush.horizontalGradient(
-                            listOf(Color.Black.copy(0.72f), Color(0xFF0B1A3A).copy(0.68f), Color.Black.copy(0.78f)),
-                        ),
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(C.card)
+                            .border(1.dp, Color(0xFF3A3A3C), RoundedCornerShape(22.dp))
+                            .clickable { onRedeem(offer.id) }
+                            .padding(18.dp),
                     ) {
-                        Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
-                            Text(if (offer.isFree) "Бесплатно для сотрудников" else "${fmt(offer.points)} баллов", color = C.white, fontFamily = T.sans, fontWeight = FontWeight.Bold, fontSize = 26.sp)
-                            Text(
-                                if (offer.isFree) "Баллы не списываются" else "Спишется с корпоративного баланса",
-                                color = C.white.copy(0.85f),
-                                fontSize = 13.sp,
-                            )
-                            if (offer.timeSlot.isNotBlank()) {
-                                Spacer(Modifier.height(10.dp))
-                                Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(0.42f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
-                                    Text(offer.timeSlot, color = C.white, fontFamily = T.sans, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                                }
+                        Text(if (offer.isFree) "Бесплатно" else "${fmt(offer.points)} баллов", color = C.navy, fontFamily = T.sans, fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                        if (offer.timeSlot.isNotBlank()) {
+                            Spacer(Modifier.height(10.dp))
+                            Box(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF2C2C2E)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                                Text(offer.timeSlot, color = C.white, fontFamily = T.sans, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             }
                         }
                     }
@@ -404,9 +434,20 @@ fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubm
             }
         }
         Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(C.bg).padding(16.dp, 16.dp, 16.dp, 28.dp)) {
-            PrimaryButton(if (offer.isFree) "Записаться бесплатно" else "Получить за ${fmt(offer.points)} баллов") {
-                val submitted = store.submitRequest(offer.id)
-                if (submitted != null) onSubmitted(submitted.id)
+            PrimaryButton(
+                when {
+                    boughtId != null -> "Готово"
+                    offer.isFree -> "Записаться бесплатно"
+                    else -> "Получить за ${fmt(offer.points)} баллов"
+                },
+            ) {
+                val id = boughtId
+                if (id != null) {
+                    onSubmitted(id)
+                } else {
+                    val submitted = store.submitRequest(offer.id)
+                    if (submitted != null) boughtId = submitted.id
+                }
             }
         }
     }
@@ -415,69 +456,270 @@ fun EmployeeBenefit(store: AppStore, offerId: String, onBack: () -> Unit, onSubm
 @Composable
 fun EmployeeRequests(store: AppStore, onOpen: (String) -> Unit, onFind: () -> Unit, onSaved: () -> Unit, onBell: () -> Unit) {
     val user = store.session ?: return
-    val items = store.requests.filter { it.employeeId == user.id }
-    Column(Modifier.fillMaxSize().background(C.bg).verticalScroll(rememberScrollState()).statusBarsPadding().padding(20.dp).padding(bottom = 120.dp)) {
-        ScreenHeader("Заявки", unread = store.unreadCount() > 0, onSaved = onSaved, onBell = onBell)
-        if (items.isEmpty()) {
-            Column(
-                Modifier.fillMaxWidth().padding(top = 72.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box(
-                    Modifier.size(88.dp).clip(CircleShape).background(C.card),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Outlined.CalendarMonth, null, tint = C.muted, modifier = Modifier.size(40.dp))
-                }
-                Spacer(Modifier.height(20.dp))
-                Text("Нет заявок", style = T.section, fontSize = 20.sp)
-                Spacer(Modifier.height(6.dp))
-                Text("Заявки, которые вы отправите, появятся здесь.", style = T.caption)
-                Spacer(Modifier.height(22.dp))
-                PrimaryButton("Найти льготу", modifier = Modifier.width(220.dp), onClick = onFind)
-            }
-            return
+    val all = store.requests.filter { it.employeeId == user.id }
+    val today = remember { LocalDate.now() }
+    val thisMonday = remember(today) { today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) }
+    val weekCenter = 52
+    val pagerState = rememberPagerState(initialPage = weekCenter) { weekCenter * 2 + 1 }
+    val scope = rememberCoroutineScope()
+    val weekStart = thisMonday.plusWeeks((pagerState.currentPage - weekCenter).toLong())
+    var selected by remember { mutableStateOf(today) }
+    val byDay = remember(all) {
+        all.groupBy { parseRequestDate(it.createdAt) ?: today }
+    }
+    LaunchedEffect(pagerState.settledPage) {
+        val start = thisMonday.plusWeeks((pagerState.settledPage - weekCenter).toLong())
+        val end = start.plusDays(6)
+        if (selected.isBefore(start) || selected.isAfter(end)) {
+            selected = if (today in start..end) today else start
         }
-        Text("Следите за статусом — карточки появляются с анимацией.", style = T.caption)
+    }
+    val dayItems = byDay[selected].orEmpty().sortedBy { requestRank(it.status) }
+    val monthTitle = remember(weekStart) {
+        val end = weekStart.plusDays(6)
+        val ru = Locale("ru", "RU")
+        if (weekStart.month == end.month) {
+            weekStart.month.getDisplayName(DateTextStyle.FULL_STANDALONE, ru)
+                .replaceFirstChar { it.titlecase(ru) } + " ${weekStart.year}"
+        } else {
+            val a = weekStart.month.getDisplayName(DateTextStyle.SHORT, ru)
+            val b = end.month.getDisplayName(DateTextStyle.SHORT, ru)
+            "$a – $b ${end.year}"
+        }
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(C.bg)
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp)
+            .padding(top = 11.dp, bottom = 96.dp),
+    ) {
+        ScreenHeader("Заявки", unread = store.unreadCount() > 0, onSaved = onSaved, onBell = onBell)
+        Spacer(Modifier.height(18.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(C.card).clickable {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+                },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.ChevronLeft, "Назад", tint = C.navy, modifier = Modifier.size(22.dp)) }
+            Text(
+                monthTitle,
+                modifier = Modifier.weight(1f),
+                style = T.section,
+                fontSize = 18.sp,
+                textAlign = TextAlign.Center,
+            )
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).background(C.card).clickable {
+                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
+                },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Outlined.ChevronRight, "Вперёд", tint = C.navy, modifier = Modifier.size(22.dp)) }
+        }
         Spacer(Modifier.height(14.dp))
-        items.forEachIndexed { index, req ->
-            var shown by remember { mutableStateOf(false) }
-            LaunchedEffect(req.id) {
-                delay(index * 80L)
-                shown = true
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().height(118.dp),
+        ) { page ->
+            val start = thisMonday.plusWeeks((page - weekCenter).toLong())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (0..6).forEach { offset ->
+                    val day = start.plusDays(offset.toLong())
+                    CalendarDayCell(
+                        day = day,
+                        active = day == selected,
+                        isToday = day == today,
+                        eventCount = byDay[day]?.size ?: 0,
+                        onClick = { selected = day },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
-            AnimatedVisibility(
-                visible = shown,
-                enter = fadeIn(tween(320)) + slideInVertically(tween(320)) { it / 3 },
-            ) {
-                val offer = store.offer(req.offerId)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(C.card)
-                        .clickable { onOpen(req.id) }
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            selectedDayLabel(selected, today),
+            style = T.section,
+            fontSize = 16.sp,
+        )
+        Spacer(Modifier.height(12.dp))
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 28.dp),
+        ) {
+            if (dayItems.isEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Box(
-                        Modifier.size(44.dp).clip(CircleShape).background(C.brandSoft),
+                        Modifier.size(72.dp).clip(CircleShape).background(C.card),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Outlined.NotificationsNone, null, tint = C.brand, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Outlined.CalendarMonth, null, tint = C.muted, modifier = Modifier.size(32.dp))
                     }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(offer?.title ?: "", fontFamily = T.sans, fontWeight = FontWeight.SemiBold, color = C.navy)
-                        Text(req.createdAt, style = T.caption)
-                        Spacer(Modifier.height(10.dp))
-                        StatusTrack(req.status)
+                    Spacer(Modifier.height(14.dp))
+                    Text("Нет заявок на этот день", style = T.caption, fontSize = 15.sp)
+                    Spacer(Modifier.height(18.dp))
+                    PrimaryButton("Найти льготу", modifier = Modifier.width(200.dp), onClick = onFind)
+                }
+            } else {
+                dayItems.forEachIndexed { index, req ->
+                    var shown by remember { mutableStateOf(false) }
+                    LaunchedEffect(req.id, selected) {
+                        shown = false
+                        delay(index * 80L)
+                        shown = true
                     }
-                    Spacer(Modifier.width(8.dp))
-                    StatusBadge(req.status)
+                    AnimatedVisibility(
+                        visible = shown,
+                        enter = fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 5 },
+                    ) {
+                        RequestDayRow(store, req) { onOpen(req.id) }
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CalendarDayCell(
+    day: LocalDate,
+    active: Boolean,
+    isToday: Boolean,
+    eventCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val pulse by rememberInfiniteTransition(label = "dayPulse").animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "dot",
+    )
+    val selectScale by animateFloatAsState(
+        if (active) 1.04f else 1f,
+        spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        label = "dayScale",
+    )
+    Column(
+        modifier
+            .height(118.dp)
+            .scale(selectScale)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (active) C.brand else C.card)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            day.dayOfWeek.getDisplayName(DateTextStyle.SHORT, Locale("ru", "RU"))
+                .take(2)
+                .replaceFirstChar { it.titlecase(Locale("ru", "RU")) },
+            color = if (active) C.white.copy(0.75f) else C.muted,
+            fontFamily = T.sans,
+            fontSize = 12.sp,
+        )
+        Text(
+            "${day.dayOfMonth}",
+            color = when {
+                active -> C.white
+                isToday -> C.brand
+                else -> C.navy
+            },
+            fontFamily = T.sans,
+            fontWeight = FontWeight.Bold,
+            fontSize = 22.sp,
+        )
+        if (eventCount > 0) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(eventCount.coerceAtMost(3)) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .scale(pulse)
+                            .clip(CircleShape)
+                            .background(if (active) C.white else C.brand),
+                    )
+                }
+            }
+        } else {
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+@Composable
+private fun RequestDayRow(store: AppStore, req: BenefitRequest, onClick: () -> Unit) {
+    val offer = store.offer(req.offerId)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(C.card)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(C.brandSoft),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.NotificationsNone, null, tint = C.brand, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    offer?.title ?: "",
+                    fontFamily = T.sans,
+                    fontWeight = FontWeight.SemiBold,
+                    color = C.navy,
+                    fontSize = 15.sp,
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(req.createdAt, style = T.caption, fontSize = 12.sp)
+            }
+            Spacer(Modifier.width(8.dp))
+            StatusBadge(req.status)
+        }
+        Spacer(Modifier.height(10.dp))
+        StatusTrack(req.status)
+    }
+}
+
+private val monthRu = mapOf(
+    "янв" to 1, "фев" to 2, "мар" to 3, "апр" to 4, "мая" to 5, "май" to 5,
+    "июн" to 6, "июл" to 7, "авг" to 8, "сен" to 9, "окт" to 10, "ноя" to 11, "дек" to 12,
+)
+
+private fun parseRequestDate(stamp: String, year: Int = LocalDate.now().year): LocalDate? {
+    val match = Regex("""(\d{1,2})\s+([а-яё]{3})""", RegexOption.IGNORE_CASE).find(stamp) ?: return null
+    val day = match.groupValues[1].toIntOrNull() ?: return null
+    val month = monthRu[match.groupValues[2].lowercase(Locale("ru", "RU"))] ?: return null
+    return runCatching { LocalDate.of(year, month, day) }.getOrNull()
+}
+
+private fun selectedDayLabel(day: LocalDate, today: LocalDate): String {
+    val ru = Locale("ru", "RU")
+    return when (day) {
+        today -> "Сегодня"
+        today.minusDays(1) -> "Вчера"
+        today.plusDays(1) -> "Завтра"
+        else -> {
+            val name = day.dayOfWeek.getDisplayName(DateTextStyle.FULL, ru).replaceFirstChar { it.titlecase(ru) }
+            val mon = day.month.getDisplayName(DateTextStyle.SHORT, ru)
+            "$name, ${day.dayOfMonth} $mon"
         }
     }
 }
@@ -490,46 +732,78 @@ fun EmployeeRequestDetail(store: AppStore, requestId: String, onBack: () -> Unit
         return
     }
     val offer = store.offer(req.offerId)
-    Column(Modifier.fillMaxSize().background(C.bg).statusBarsPadding()) {
-        Row(
+    val free = offer?.isFree == true
+    Box(Modifier.fillMaxSize().background(C.bg)) {
+        SceneBackdrop(
+            resId = offer?.let { heroRes(it) } ?: sceneRes(Category.events),
+            modifier = Modifier.fillMaxWidth().height(340.dp),
+            overlay = sceneScrim(top = 0.28f, mid = 0.40f, bottom = 0.88f),
+        )
+        Column(
             Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onBack)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 120.dp),
         ) {
-            Icon(Icons.Outlined.ChevronLeft, null, tint = C.brand)
-            Text("Назад", fontFamily = T.sans, fontWeight = FontWeight.Medium, color = C.brand)
-        }
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 32.dp)) {
-            Text(offer?.title ?: "", style = T.title.copy(fontSize = 26.sp))
-            Spacer(Modifier.height(6.dp))
-            Text(if (offer?.isFree == true) "Бесплатно" else "${fmt(offer?.points ?: 0)} баллов", color = C.brand, fontFamily = T.sans, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            StatusBadge(req.status)
-            Spacer(Modifier.height(16.dp))
-            StatusTrack(req.status, showLabels = true)
-            if (req.status.hasEntryPass()) {
-                Spacer(Modifier.height(18.dp))
-                EntryQrCard(req)
-            }
-            Spacer(Modifier.height(22.dp))
-            req.history.forEachIndexed { index, event ->
-                val last = index == req.history.lastIndex
-                Row {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(16.dp)) {
-                        Box(Modifier.size(12.dp).clip(CircleShape).background(if (last) C.brand else C.brand.copy(0.45f)))
-                        if (!last) {
-                            Box(Modifier.width(2.dp).height(40.dp).background(C.brandSoft))
-                        }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.padding(bottom = 18.dp)) {
-                        Text(statusLabel(event.status), fontFamily = T.sans, fontWeight = FontWeight.Medium, color = C.navy)
-                        Text("${event.at} · ${event.note}", style = T.caption)
-                    }
+            Column(Modifier.statusBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Box(
+                    Modifier.size(40.dp).clip(CircleShape).background(Color.Black.copy(0.35f)).clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Outlined.ChevronLeft, "Назад", tint = C.white) }
+                Spacer(Modifier.height(72.dp))
+                Text(
+                    statusLabel(req.status),
+                    color = C.white.copy(0.9f),
+                    fontFamily = T.sans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    letterSpacing = 1.2.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    offer?.title ?: "Заявка",
+                    fontFamily = T.sans,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 34.sp,
+                    color = C.white,
+                    lineHeight = 40.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (free) Color(0xFF163024) else Color.Black.copy(0.42f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        if (free) "Бесплатно" else "${fmt(offer?.points ?: 0)} баллов",
+                        color = if (free) Color(0xFF86EFAC) else C.white,
+                        fontFamily = T.sans,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
                 }
             }
+            Spacer(Modifier.height(18.dp))
+            Column(
+                Modifier
+                    .padding(horizontal = 20.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(C.card)
+                    .padding(16.dp),
+            ) {
+                StatusTrack(req.status, showLabels = true)
+            }
+            if (req.status.hasEntryPass()) {
+                Spacer(Modifier.height(18.dp))
+                Box(Modifier.padding(horizontal = 20.dp)) {
+                    EntryQrCard(req)
+                }
+            }
+        }
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(C.bg).padding(16.dp, 16.dp, 16.dp, 28.dp)) {
+            PrimaryButton("Готово", onClick = onBack)
         }
     }
 }
@@ -549,17 +823,17 @@ fun EmployeeProfile(
     var editing by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     LaunchedEffect(editing) { if (editing) scroll.animateScrollTo(scroll.maxValue) }
-    Column(Modifier.fillMaxSize().background(C.bg).verticalScroll(scroll).statusBarsPadding().padding(20.dp).padding(bottom = 120.dp)) {
+    Column(Modifier.fillMaxSize().background(C.bg).verticalScroll(scroll).statusBarsPadding().padding(horizontal = 20.dp).padding(top = 27.dp, bottom = 120.dp)) {
         ScreenHeader("Ещё", unread = store.unreadCount() > 0, onSaved = onSaved, onBell = onBell)
         Text(company?.name ?: "Corporate", style = T.caption)
         Spacer(Modifier.height(18.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.card).padding(vertical = 6.dp)) {
-            SheetRow(Icons.Outlined.Person, "Профиль", user.jobTitle.ifBlank { "Ваш профиль в Corporate" }) { editing = true }
-            SheetRow(Icons.Outlined.CreditCard, "Баланс", "${fmt(user.balance)} баллов на льготы", onClick = onBalance)
-            SheetRow(Icons.Outlined.ListAlt, "Заявки", "Статус записей и списаний", onClick = onRequests)
-            SheetRow(Icons.Outlined.BookmarkBorder, "Сохранённые", "Льготы, которые вы отметили", onClick = onSaved)
-            SheetRow(Icons.Outlined.FavoriteBorder, "Интересы", "Подберём льготы под вас", onClick = store::reopenOnboarding)
-            SheetRow(Icons.Outlined.Logout, "Выйти", "Завершить сессию", onClick = store::logout)
+            SheetRow(Icons.Outlined.Person, "Профиль", user.jobTitle.takeIf { it.isNotBlank() }) { editing = true }
+            SheetRow(Icons.Outlined.CreditCard, "Баланс", "${fmt(user.balance)} баллов", onClick = onBalance)
+            SheetRow(Icons.Outlined.ListAlt, "Заявки", onClick = onRequests)
+            SheetRow(Icons.Outlined.BookmarkBorder, "Сохранённые", onClick = onSaved)
+            SheetRow(Icons.Outlined.FavoriteBorder, "Интересы", onClick = store::reopenOnboarding)
+            SheetRow(Icons.Outlined.Logout, "Выйти", onClick = store::logout)
         }
         Spacer(Modifier.height(20.dp))
         Text("Тема", style = T.section)
@@ -587,15 +861,33 @@ fun EmployeeProfile(
                 editing = false
             }
         }
-        Spacer(Modifier.height(12.dp))
-        Text(roleTitle(user.role), style = T.caption)
-        Text(roleDescription(user.role), style = T.caption)
-        Text(company?.name ?: "", style = T.caption)
+        Spacer(Modifier.height(20.dp))
+        PartnerLeadForm(store)
     }
 }
 
 @Composable
-private fun FeaturedCard(offer: Offer, onClick: () -> Unit) {
+private fun CorporateMiniCard(store: AppStore, onOpen: () -> Unit) {
+    val user = store.session ?: return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF0B1A3A), Color(0xFF246BFD), Color(0xFF111827))))
+            .clickable(onClick = onOpen)
+            .padding(16.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("CORPORATE", color = C.white.copy(0.75f), fontFamily = T.sans, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.5.sp)
+            Icon(Icons.Outlined.ChevronRight, null, tint = C.white.copy(0.7f), modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text("${fmt(user.balance)} баллов", color = C.white, fontFamily = T.sans, fontWeight = FontWeight.Black, fontSize = 26.sp)
+    }
+}
+
+@Composable
+private fun FeaturedCard(offer: Offer, onClick: () -> Unit, onRedeem: () -> Unit) {
     SceneBackdrop(
         resId = sceneRes(offer),
         modifier = Modifier
@@ -609,17 +901,12 @@ private fun FeaturedCard(offer: Offer, onClick: () -> Unit) {
             Text(offer.title, fontFamily = T.sans, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = C.white)
             Spacer(Modifier.height(8.dp))
             Text(
-                if (offer.isFree) "Бесплатно для сотрудников" else "${fmt(offer.points)} баллов",
+                if (offer.isFree) "Бесплатно" else "${fmt(offer.points)} баллов",
                 color = C.white,
                 fontFamily = T.sans,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
-            )
-            Text(
-                if (offer.isFree) "Баллы не списываются" else "Спишется с корпоративного баланса",
-                color = C.white.copy(0.85f),
-                fontFamily = T.sans,
-                fontSize = 13.sp,
+                modifier = Modifier.clickable(onClick = onRedeem),
             )
         }
     }
@@ -647,7 +934,7 @@ private fun MenuRow(title: String, subtitle: String, onClick: () -> Unit, traili
 }
 
 @Composable
-internal fun OfferModule(store: AppStore, offer: Offer, framed: Boolean = false, onClick: () -> Unit) {
+internal fun OfferModule(store: AppStore, offer: Offer, framed: Boolean = false, onClick: () -> Unit, onRedeem: () -> Unit = {}) {
     val saved = store.isSaved(offer.id)
     val scale by animateFloatAsState(
         if (saved) 1.12f else 1f,
@@ -688,10 +975,11 @@ internal fun OfferModule(store: AppStore, offer: Offer, framed: Boolean = false,
                 Text(offer.title, fontSize = 16.sp, fontFamily = T.sans, fontWeight = FontWeight.Bold, color = C.white, maxLines = 2)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (offer.isFree) "Бесплатно для сотрудников" else "${fmt(offer.points)} баллов",
+                    if (offer.isFree) "Бесплатно" else "${fmt(offer.points)} баллов",
                     color = C.white.copy(0.88f),
                     fontFamily = T.sans,
                     fontSize = 12.sp,
+                    modifier = Modifier.clickable(onClick = onRedeem),
                 )
             }
         }
@@ -699,7 +987,7 @@ internal fun OfferModule(store: AppStore, offer: Offer, framed: Boolean = false,
 }
 
 @Composable
-private fun SheetRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+private fun SheetRow(icon: ImageVector, title: String, subtitle: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -710,7 +998,7 @@ private fun SheetRow(icon: ImageVector, title: String, subtitle: String, onClick
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontFamily = T.sans, fontWeight = FontWeight.SemiBold, color = C.navy)
-            Text(subtitle, style = T.caption)
+            if (!subtitle.isNullOrBlank()) Text(subtitle, style = T.caption)
         }
         Icon(Icons.Outlined.ChevronRight, null, tint = C.muted, modifier = Modifier.size(18.dp))
     }

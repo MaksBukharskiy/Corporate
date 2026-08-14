@@ -19,7 +19,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import uz.click.benefits.data.Category
 import uz.click.benefits.data.RequestStatus
-import uz.click.benefits.data.Role
 
 data class Palette(
     val brand: Color,
@@ -206,11 +205,19 @@ fun statusColors(status: RequestStatus) = when (status) {
 }
 
 fun statusLabel(status: RequestStatus) = when (status) {
-    RequestStatus.pending -> "На рассмотрении"
-    RequestStatus.approved -> "Одобрена"
+    RequestStatus.pending -> "Ожидание"
+    RequestStatus.approved -> "Одобрено"
     RequestStatus.in_progress -> "В работе"
     RequestStatus.completed -> "Завершена"
     RequestStatus.rejected -> "Отклонена"
+}
+
+fun requestRank(status: RequestStatus) = when (status) {
+    RequestStatus.in_progress -> 0
+    RequestStatus.approved -> 1
+    RequestStatus.pending -> 2
+    RequestStatus.completed -> 3
+    RequestStatus.rejected -> 4
 }
 
 fun categoryAccent(category: Category) = when (category) {
@@ -229,16 +236,4 @@ fun categoryLabel(category: Category) = when (category) {
     Category.health -> "Здоровье"
     Category.transport -> "Транспорт"
     Category.events -> "Ивенты"
-}
-
-fun roleTitle(role: Role) = when (role) {
-    Role.employee -> "Сотрудник"
-    Role.merchant -> "Партнёр-мерчант"
-    Role.admin -> "Администратор"
-}
-
-fun roleDescription(role: Role) = when (role) {
-    Role.employee -> "Вы сотрудник компании. Получаете корпоративные баллы, записываетесь на бесплатные сервисы для команды и оформляете платные льготы."
-    Role.merchant -> "Вы представляете партнёра. Публикуете предложения, принимаете и отклоняете заявки сотрудников."
-    Role.admin -> "Вы управляете платформой: компании, сотрудники, партнёры и операции по баллам."
 }

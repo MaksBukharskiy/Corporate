@@ -10,14 +10,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
@@ -27,7 +30,6 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Store
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,11 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import uz.click.benefits.ui.theme.C
-import uz.click.benefits.ui.theme.T
 
 data class TabItem(val key: String, val label: String, val icon: ImageVector)
 
@@ -50,11 +49,12 @@ fun FloatingTabBar(
     selected: String,
     onSelect: (String) -> Unit,
 ) {
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Column(
         Modifier
             .fillMaxWidth()
             .background(C.bg)
-            .navigationBarsPadding(),
+            .padding(bottom = (navBottom - 7.dp).coerceAtLeast(0.dp)),
     ) {
         Box(Modifier.fillMaxWidth().height(0.5.dp).background(C.line.copy(alpha = 0.4f)))
         Row(
@@ -79,31 +79,17 @@ fun FloatingTabBar(
                     if (focused) Color(0xFF1A2744) else Color.Transparent,
                     label = "tabPill",
                 )
-                Column(
+                Box(
                     Modifier
+                        .height(36.dp)
+                        .width(48.dp)
+                        .scale(scale)
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable { if (!focused) onSelect(tab.key) }
-                        .padding(horizontal = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                        .background(pill)
+                        .clickable { if (!focused) onSelect(tab.key) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        Modifier
-                            .height(28.dp)
-                            .width(52.dp)
-                            .scale(scale)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(pill),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(tab.icon, tab.label, tint = tint, modifier = Modifier.size(22.dp))
-                    }
-                    Text(
-                        tab.label,
-                        color = if (focused) C.brand else C.muted,
-                        fontSize = 11.sp,
-                        fontFamily = T.sans,
-                        fontWeight = if (focused) FontWeight.Medium else FontWeight.Normal,
-                    )
+                    Icon(tab.icon, tab.label, tint = tint, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -113,6 +99,7 @@ fun FloatingTabBar(
 fun employeeTabs() = listOf(
     TabItem("home", "Главная", Icons.Outlined.Home),
     TabItem("catalog", "Каталог", Icons.Outlined.Search),
+    TabItem("you", "Lin", Icons.Outlined.AutoAwesome),
     TabItem("requests", "Заявки", Icons.Outlined.CalendarMonth),
     TabItem("profile", "Ещё", Icons.Outlined.MoreHoriz),
 )

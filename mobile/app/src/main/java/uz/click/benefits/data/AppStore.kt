@@ -22,31 +22,29 @@ class AppStore : ViewModel() {
         private set
     var transactions by mutableStateOf(Seed.transactions)
         private set
+    var partnerLeads by mutableStateOf(listOf<PartnerLead>())
+        private set
 
-    fun login(email: String, password: String): String? {
-        if (password != "1234") return "Неверный пароль"
+    fun login(email: String, password: String): String? = loginWithCode(email, password)
+
+    /** Employee access: email + invite code from external HR/service. No self-registration. */
+    fun loginWithCode(email: String, code: String): String? {
+        val invite = code.trim().uppercase().replace(" ", "")
+        if (email.isBlank()) return "Укажите рабочую почту"
+        if (invite.isBlank()) return "Введите код доступа"
+        if (invite != "1234" && invite != "CORP-2026" && invite != "CORP2026") {
+            return "Неверный код доступа"
+        }
         val key = email.trim().lowercase()
         val user = users.find {
-            it.email.equals(key, true) || it.email.substringBefore("@") == key || it.name.equals(key, true)
-        } ?: return "Аккаунт не найден"
+            it.email.equals(key, true) || it.email.substringBefore("@") == key
+        } ?: return "Сотрудник с такой почтой не найден. Проверьте код у компании."
         session = user
         return null
     }
 
     fun register(name: String, email: String, password: String): String? {
-        if (email.isBlank() || password.isBlank()) return "Заполните email и пароль"
-        val user = User(
-            id = "u${System.currentTimeMillis()}",
-            role = Role.employee,
-            name = name.ifBlank { "Новый сотрудник" },
-            email = email.trim(),
-            companyId = "c1",
-            balance = 8000,
-            onboardingDone = false,
-        )
-        users = users + user
-        session = user
-        return null
+        return "Регистрации нет — войдите с кодом от компании"
     }
 
     var darkTheme by mutableStateOf(true)
@@ -58,14 +56,18 @@ class AppStore : ViewModel() {
     fun toggleSaved(offerId: String) {
         val adding = offerId !in savedOfferIds
         savedOfferIds = if (adding) savedOfferIds + offerId else savedOfferIds - offerId
-        toastSavedId = if (adding) offerId else null
+        if (adding) ping("Сохранено")
     }
 
-    var toastSavedId by mutableStateOf<String?>(null)
+    var toast by mutableStateOf<AppToast?>(null)
         private set
 
-    fun clearSavedToast() {
-        toastSavedId = null
+    fun ping(text: String, hero: Boolean = false) {
+        toast = AppToast(text = text, hero = hero)
+    }
+
+    fun clearToast() {
+        toast = null
     }
 
     fun isSaved(offerId: String) = offerId in savedOfferIds
@@ -120,6 +122,9 @@ class AppStore : ViewModel() {
             transactions = listOf(
                 Transaction("t${System.currentTimeMillis()}", TxType.redeem, offer.points, user.id, companyId, offer.id, stamp)
             ) + transactions
+            ping("Куплено", hero = true)
+        } else {
+            ping("Записались", hero = true)
         }
         return request
     }
@@ -200,6 +205,34 @@ class AppStore : ViewModel() {
             .filter { it.second > 0 }
             .sortedByDescending { it.second }
             .map { it.first }
+    }
+
+    fun topUp(amount: Int) {
+        if (amount <= 0) return
+        val user = session ?: return
+        val updated = user.copy(balance = user.balance + amount)
+        session = updated
+        users = users.map { if (it.id == user.id) updated else it }
+        transactions = listOf(
+            Transaction("t${System.currentTimeMillis()}", TxType.topup, amount, user.id, user.companyId, null, now()),
+        ) + transactions
+        ping("Пополнено")
+    }
+
+    fun submitPartnerLead(company: String, contact: String, email: String, note: String): String? {
+        if (company.isBlank() || email.isBlank()) return "Укажите компанию и email"
+        partnerLeads = listOf(
+            PartnerLead(
+                id = "p${System.currentTimeMillis()}",
+                company = company.trim(),
+                contact = contact.trim(),
+                email = email.trim(),
+                note = note.trim(),
+                createdAt = now(),
+            ),
+        ) + partnerLeads
+        ping("Заявку приняли")
+        return null
     }
 
     fun offer(id: String) = offers.find { it.id == id }
