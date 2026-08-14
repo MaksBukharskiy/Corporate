@@ -1,0 +1,17 @@
+backend/target/
+backend/.mvn/
+web/node_modules/
+web/dist/
+mobile/node_modules/
+mobile/.expo/
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+android-native/.gradle/
+android-native/local.properties
+android-native/app/build/
+android-native/build/
+android-native/.idea/
+.idea/
+*.iml
+.DS_Store
