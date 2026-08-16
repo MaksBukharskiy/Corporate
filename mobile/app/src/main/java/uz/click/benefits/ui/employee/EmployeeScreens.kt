@@ -94,7 +94,6 @@ import uz.click.benefits.ui.components.ScreenHeader
 import uz.click.benefits.ui.components.StatusBadge
 import uz.click.benefits.ui.components.StatusTrack
 import uz.click.benefits.ui.components.EntryQrCard
-import uz.click.benefits.ui.components.PartnerLeadForm
 import uz.click.benefits.ui.components.hasEntryPass
 import uz.click.benefits.ui.components.sceneRes
 import uz.click.benefits.ui.components.heroRes
@@ -861,8 +860,6 @@ fun EmployeeProfile(
                 editing = false
             }
         }
-        Spacer(Modifier.height(20.dp))
-        PartnerLeadForm(store)
     }
 }
 

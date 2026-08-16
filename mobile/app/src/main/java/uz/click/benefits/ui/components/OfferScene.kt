@@ -20,6 +20,8 @@ import uz.click.benefits.data.Offer
 private val allScenes = listOf(
     R.drawable.scene_gym,
     R.drawable.scene_yoga,
+    R.drawable.scene_pizza,
+    R.drawable.scene_lunch,
     R.drawable.scene_food,
     R.drawable.scene_education,
     R.drawable.scene_health,
@@ -31,11 +33,16 @@ private val allScenes = listOf(
 
 fun scenesFor(category: Category) = when (category) {
     Category.sport -> listOf(R.drawable.scene_gym, R.drawable.scene_yoga)
-    Category.food -> listOf(R.drawable.scene_food, R.drawable.scene_education)
+    Category.food -> listOf(R.drawable.scene_lunch, R.drawable.scene_pizza)
     Category.education -> listOf(R.drawable.scene_education, R.drawable.scene_gym)
     Category.health -> listOf(R.drawable.scene_health, R.drawable.scene_yoga)
     Category.transport -> listOf(R.drawable.scene_parking, R.drawable.scene_shuttle)
-    Category.events -> listOf(R.drawable.scene_fest, R.drawable.scene_lake)
+    Category.events -> listOf(
+        R.drawable.scene_yoga,
+        R.drawable.scene_gym,
+        R.drawable.scene_pizza,
+        R.drawable.scene_lunch,
+    )
 }
 
 @DrawableRes
@@ -43,10 +50,13 @@ fun sceneRes(offer: Offer): Int {
     val key = "${offer.subsection} ${offer.title} ${offer.description}".lowercase()
     return when {
         "йог" in key -> R.drawable.scene_yoga
+        "зал" in key || "абонемент" in key || "тренир" in key -> R.drawable.scene_gym
+        "пицц" in key -> R.drawable.scene_pizza
+        "ланч" in key || "обед" in key || "обеды" in key -> R.drawable.scene_lunch
         "парков" in key -> R.drawable.scene_parking
         "трансфер" in key || "шаттл" in key -> R.drawable.scene_shuttle
-        "fest" in key || "фестив" in key -> R.drawable.scene_fest
-        "озер" in key || "тимбилд" in key || "чарвак" in key -> R.drawable.scene_lake
+        "fest" in key || "фестив" in key -> R.drawable.scene_pizza
+        "озер" in key || "тимбилд" in key || "чарвак" in key -> R.drawable.scene_lunch
         else -> sceneRes(offer.category)
     }
 }
